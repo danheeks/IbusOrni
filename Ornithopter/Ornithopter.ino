@@ -71,11 +71,11 @@ void setServoHeight(bool right_not_left, double height)
   // sets the servo to a height, 1.0 is total maximum, -1.0 is total minimum
   if(right_not_left)
   {
-    servoRight.writeMicroseconds(1500 - height * 500);
+    servoRight.writeMicroseconds(1500 + height * 500);
   }
   else
   {
-    servoLeft.writeMicroseconds(1500 + height * 500);
+    servoLeft.writeMicroseconds(1500 - height * 500);
   }
 }
 
