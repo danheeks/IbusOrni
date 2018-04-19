@@ -6,11 +6,11 @@
 #include <string.h>
 #include <Servo.h>
 
-#define LED_FOR_PITCH 0
 #define IBUS_MAXCHANNELS 14
 #define FAILSAFELIMIT 1020    // When all the 6 channels below this value assume failsafe
 #define IBUS_BUFFSIZE 32    // Max iBus packet size (2 byte header, 14 channels x 2 bytes, 2 byte checksum)
-#define PITCH_FACTOR 0.25
+#define PITCH_FACTOR 0.2
+#define PITCH_OFFSET 0.25   // set the pitch centre height
 #define ROLL_FACTOR 0.4
 
 static uint16_t rcFailsafe[IBUS_MAXCHANNELS] = {  1500, 1500, 950, 1500, 2000, 1500, 1500, 1500, 1500, 1500, 1500, 1500, 1500, 1500 };
@@ -20,12 +20,12 @@ static boolean rxFrameDone;
 static boolean failsafe = 0;
 unsigned long start_time;
 unsigned long prev_time;
-double startup_height = 1.0;   // attach wing in top position
+double startup_height = 1.05;   // attach wing in top position
 unsigned int startup_delay = 5; // seconds
 unsigned int startup_sweep_time = 4; // seconds
 bool armed = false;
 bool in_a_move = false;
-unsigned int fast_cycle_time = 300;
+unsigned int fast_cycle_time = 350;
 unsigned int slow_cycle_time = 1400;
 double cycle_fraction = 1.0;
 bool stopping_at_half = false;
@@ -38,28 +38,19 @@ void readRx();
 
 
 void setup() {
-#if DEBUG
-  Serial.begin(9600);
-#else
   setupRx();
-#endif
   setupServos();
 }
 
 void loop() {
-#if !DEBUG
   readRx();  
-#endif
   setServos();
-  readRx();
+  readRx(); // read receiver serial code twice, otherwise slowness of setting two servos causes buffer overrun
 }
 
 void setupServos()
 {
   start_time = millis();
-#if DEBUG
-  Serial.println(start_time);
-#endif
   prev_time = start_time;
   servoLeft.attach(8);
   servoRight.attach(9);
@@ -85,17 +76,8 @@ void setServos()
   double roll = ((double)rcValue[0] - 1500)/500;; // + is right, - is left,  range from -1.0 to 1.0 
   double throttle = ((double)rcValue[2] - 1000)/1000; // number from 0.0 to 1.0
 
-#if LED_FOR_PITCH
-//  digitalWrite(13, (pitch > 0.5 || pitch < -0.5 || roll > 0.5 || roll < -0.5) ? HIGH:LOW);
-  digitalWrite(13, LOW);
-#endif
-    
-  //pitch = -1.0;
-  //roll = 0.0;
-  //throttle = 0.0;
-
-  double left_centre = pitch * PITCH_FACTOR - roll * ROLL_FACTOR;
-  double right_centre = pitch * PITCH_FACTOR + roll * ROLL_FACTOR;
+  double left_centre = pitch * PITCH_FACTOR - roll * ROLL_FACTOR + PITCH_OFFSET;
+  double right_centre = pitch * PITCH_FACTOR + roll * ROLL_FACTOR + PITCH_OFFSET;
 
   unsigned long now = millis();  
   unsigned long time_since_start = now - start_time;
@@ -106,11 +88,6 @@ void setServos()
   {
     setServoHeight(false, startup_height);
     setServoHeight(true, startup_height);
-#if DEBUG
-    Serial.print("1: startup_height: ");
-    printDouble(startup_height, 2);
-    Serial.println("");
-#endif
   }
   else if(time_since_start < (startup_delay + startup_sweep_time) * 1000)
   {      
@@ -118,11 +95,6 @@ void setServos()
     double sweep_fraction = ((double)(time_since_start) - startup_delay * 1000) / ( startup_sweep_time * 1000);
     double left_height = startup_height + sweep_fraction * ( left_centre - startup_height );
     double right_height = startup_height + sweep_fraction * ( right_centre - startup_height );
-#if DEBUG
-    Serial.print("2: left height: ");
-    printDouble(left_height, 2);
-    Serial.println("");
-#endif
     setServoHeight(false, left_height);
     setServoHeight(true, right_height);
   }
@@ -178,16 +150,6 @@ void setServos()
     double right_height = right_centre + height;
     setServoHeight(false, left_height);
     setServoHeight(true, right_height);
-
-//    servoLeft.writeMicroseconds(rcValue[0]);
-//    servoRight.writeMicroseconds(rcValue[1]);
-    
-#if DEBUG
-    Serial.print("3: left height: ");
-    printDouble(left_height, 2);
-    Serial.println("");
-#endif
- 
   }
 }
 
@@ -267,9 +229,7 @@ void readRx()
           cli(); // disable interrupts
           memcpy(rcValueSafe, rcFailsafe, IBUS_MAXCHANNELS * sizeof(uint16_t));
           sei();
-#if !LED_FOR_PITCH
           digitalWrite(13, HIGH);  //  Error - turn on error LED
-#endif
         }
         else
         {
@@ -288,51 +248,12 @@ void readRx()
           rcValueSafe[8] = rcValue[8];
           rcValueSafe[9] = rcValue[9];
           sei();
-#if !LED_FOR_PITCH
           digitalWrite(13, LOW); // OK packet - Clear error LED
-#endif
         }
       } else {
-#if !LED_FOR_PITCH
         digitalWrite(13, HIGH);  // Checksum error - turn on error LED
-#endif
       }
       return;
     }
   }
 }
-
-#if DEBUG
-
-void printDouble( double val, byte precision){
- // prints val with number of decimal places determine by precision
- // precision is a number from 0 to 6 indicating the desired decimial places
- // example: lcdPrintDouble( 3.1415, 2); // prints 3.14 (two decimal places)
-
- if(val < 0.0){
-   Serial.print('-');
-   val = -val;
- }
-
- Serial.print (int(val));  //prints the int part
- if( precision > 0) {
-   Serial.print("."); // print the decimal point
-   unsigned long frac;
-   unsigned long mult = 1;
-   byte padding = precision -1;
-   while(precision--)
- mult *=10;
-
-   if(val >= 0)
-frac = (val - int(val)) * mult;
-   else
-frac = (int(val)- val ) * mult;
-   unsigned long frac1 = frac;
-   while( frac1 /= 10 )
-padding--;
-   while(  padding--)
-Serial.print("0");
-   Serial.print(frac,DEC) ;
- }
-}
-#endif
