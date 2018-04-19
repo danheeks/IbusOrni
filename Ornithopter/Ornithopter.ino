@@ -12,8 +12,8 @@
 #define FAILSAFELIMIT 1020    // When all the 6 channels below this value assume failsafe
 #define IBUS_BUFFSIZE 32    // Max iBus packet size (2 byte header, 14 channels x 2 bytes, 2 byte checksum)
 #define PITCH_FACTOR 0.25
-#define ROLL_FACTOR 0.25
-
+#define ROLL_FACTOR 0.4
+#define MIN_SERVO_POS_MILLISECONDS 
 static uint16_t rcFailsafe[IBUS_MAXCHANNELS] = {  1500, 1500, 950, 1500, 2000, 1500, 1500, 1500, 1500, 1500, 1500, 1500, 1500, 1500 };
 static uint16_t rcValue[IBUS_MAXCHANNELS];
 static uint16_t rcValueSafe[IBUS_MAXCHANNELS]; // read by interrupt handler. Data copied here in cli/sei block
@@ -21,7 +21,7 @@ static boolean rxFrameDone;
 static boolean failsafe = 0;
 unsigned long start_time;
 unsigned long prev_time;
-double startup_height = -1.2;   // attach wing in mostly down position
+double startup_height = 1.0;   // attach wing in top position
 unsigned int startup_delay = 5; // seconds
 unsigned int startup_sweep_time = 4; // seconds
 bool armed = false;
@@ -71,11 +71,11 @@ void setServoHeight(bool right_not_left, double height)
   // sets the servo to a height, 1.0 is total maximum, -1.0 is total minimum
   if(right_not_left)
   {
-    servoRight.writeMicroseconds(1500 + height * 500);
+    servoRight.writeMicroseconds(1500 + height * 800);
   }
   else
   {
-    servoLeft.writeMicroseconds(1500 - height * 500);
+    servoLeft.writeMicroseconds(1500 - height * 800);
   }
 }
 

@@ -1,0 +1,42 @@
+﻿Dan Heeks version:
+
+servo x 2
+  KST MS320 HV Contactless Servo - 6.2kg.cm 0.07s 21g 12mm
+flight computer ( arduino nano )    6g
+battery 17g
+receiver.  Micro Flysky Compatible Receiver FS82 AFHDS 2A IBUS PPM For Flysky.  1g
+fabric 238T
+carbon fiber rods 2.0mm, 1.5mm, 1.0mm
+
+
+
+
+
+
+
+
+takemura's earlier machine
+Width : 1800mm Length : 620mm lipo : 2cell 360mAh 35C Servo : SAVOX SV-1270TG *2 Total Weight : 311g
+
+
+------------------------------------------------
+takemura's machine
+video 1:
+total weight 117g
+wingspan 1000mm
+length 430mm
+servo KST_MS320 x 2    https://www.hyperflight.co.uk/products.asp?code=KST-MS320&name=kst-ms320-hv-contactless-servo-6-2kg-cm-0-07s-21g-12mm
+    ( Operating voltage 	6.0V to 8.4V )
+looks like and arduino nano
+looks like 5V bec little receiver
+
+video 2:
+wingspan 1180mm
+LIpo 240mAh 25C
+
+video 3:
+change pro micro ( arduino ) to 
+A-Star 32 U 4 Micro
+
+video 4:
+This machine uses the following carbon rod · Front end φ 2.5 + φ 2.0 · Diagonal reinforcement from fuselage φ1.6 · Other φ1.0﻿
