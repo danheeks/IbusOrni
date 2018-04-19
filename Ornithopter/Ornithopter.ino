@@ -7,13 +7,12 @@
 #include <Servo.h>
 
 #define LED_FOR_PITCH 0
-
 #define IBUS_MAXCHANNELS 14
 #define FAILSAFELIMIT 1020    // When all the 6 channels below this value assume failsafe
 #define IBUS_BUFFSIZE 32    // Max iBus packet size (2 byte header, 14 channels x 2 bytes, 2 byte checksum)
 #define PITCH_FACTOR 0.25
 #define ROLL_FACTOR 0.4
-#define MIN_SERVO_POS_MILLISECONDS 
+
 static uint16_t rcFailsafe[IBUS_MAXCHANNELS] = {  1500, 1500, 950, 1500, 2000, 1500, 1500, 1500, 1500, 1500, 1500, 1500, 1500, 1500 };
 static uint16_t rcValue[IBUS_MAXCHANNELS];
 static uint16_t rcValueSafe[IBUS_MAXCHANNELS]; // read by interrupt handler. Data copied here in cli/sei block
@@ -26,8 +25,8 @@ unsigned int startup_delay = 5; // seconds
 unsigned int startup_sweep_time = 4; // seconds
 bool armed = false;
 bool in_a_move = false;
-unsigned int fast_cycle_time = 400;
-unsigned int slow_cycle_time = 2000;
+unsigned int fast_cycle_time = 300;
+unsigned int slow_cycle_time = 1400;
 double cycle_fraction = 1.0;
 bool stopping_at_half = false;
 Servo servoLeft;
