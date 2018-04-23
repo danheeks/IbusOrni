@@ -8,7 +8,7 @@
 
 #define IBUS_MAXCHANNELS 14
 #define FAILSAFELIMIT 1020    // When all the 6 channels below this value assume failsafe
-#define IBUS_BUFFSIZE 128    // Max iBus packet size (2 byte header, 14 channels x 2 bytes, 2 byte checksum)
+#define IBUS_BUFFSIZE 32    // Max iBus packet size (2 byte header, 14 channels x 2 bytes, 2 byte checksum)
 #define PITCH_FACTOR 0.2
 #define PITCH_OFFSET 0.1   // set the pitch centre height
 #define ROLL_FACTOR 0.4
@@ -25,10 +25,11 @@ unsigned int startup_delay = 5; // seconds
 unsigned int startup_sweep_time = 4; // seconds
 bool armed = false;
 bool in_a_move = false;
-unsigned int fast_cycle_time = 340;
-unsigned int slow_cycle_time = 1400;
+double fast_cycle_speed = 3.0;
+double slow_cycle_speed = 0.7;
 double cycle_fraction = 1.0;
 bool stopping_at_half = false;
+double one_over_sweep_time_and_thousand = 0.001/startup_sweep_time;
 Servo servoLeft;
 Servo servoRight;
 
@@ -92,7 +93,7 @@ void setServos()
   else if(time_since_start < (startup_delay + startup_sweep_time) * 1000)
   {      
     // sweep steadily from startup height to centre height
-    double sweep_fraction = ((double)(time_since_start) - startup_delay * 1000) / ( startup_sweep_time * 1000);
+    double sweep_fraction = ((double)(time_since_start) - startup_delay * 1000) * one_over_sweep_time_and_thousand;
     double left_height = startup_height + sweep_fraction * ( left_centre - startup_height );
     double right_height = startup_height + sweep_fraction * ( right_centre - startup_height );
     setServoHeight(false, left_height);
@@ -101,7 +102,7 @@ void setServos()
   else
   {
     // out of startup
-    double cycle_time = slow_cycle_time; // default is to go slow to end of cycle
+    double cycle_speed = slow_cycle_speed; // default is to go slow to end of cycle
 
     bool low_throttle = (throttle < 0.2);
 
@@ -113,11 +114,11 @@ void setServos()
     {
       if(armed)
       {
-        cycle_time = fast_cycle_time + (slow_cycle_time - fast_cycle_time) * ( 1.0 - throttle);
+        cycle_speed = slow_cycle_speed + (fast_cycle_speed - slow_cycle_speed) * throttle;
       }
     }
 
-     cycle_fraction += (double)dt / cycle_time;
+     cycle_fraction += (double)dt * cycle_speed * 0.001;
 
      if(low_throttle)
      {
