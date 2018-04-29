@@ -10,7 +10,7 @@
 #define FAILSAFELIMIT 1020    // When all the 6 channels below this value assume failsafe
 #define IBUS_BUFFSIZE 32    // Max iBus packet size (2 byte header, 14 channels x 2 bytes, 2 byte checksum)
 #define PITCH_FACTOR 0.2
-#define PITCH_OFFSET 0.1   // set the pitch centre height
+#define PITCH_OFFSET -0.3   // set the pitch centre height
 #define ROLL_FACTOR 0.4
 
 static uint16_t rcFailsafe[IBUS_MAXCHANNELS] = {  1500, 1500, 950, 1500, 2000, 1500, 1500, 1500, 1500, 1500, 1500, 1500, 1500, 1500 };
@@ -156,16 +156,7 @@ void setServos()
 
 double GetHeightFromFraction(double cycle_fraction)
 {
-  // squarish
-  if(cycle_fraction < 0.125)
-    return -0.5 * sin(cycle_fraction * 12.566370614);
-  if(cycle_fraction < 0.375)
-    return -0.5;
-  if(cycle_fraction < 0.625)
-    return 0.5 * sin((cycle_fraction - 0.5) * 12.566370614);
-  if(cycle_fraction < 0.875)
-    return 0.5;
-  return -0.5 * sin(cycle_fraction * 12.566370614);
+  return -0.5 * sin(cycle_fraction * 6.2831853);
 }
 
 static uint8_t ibusIndex = 0;
