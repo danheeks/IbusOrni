@@ -16,7 +16,10 @@ class Wing(cad.Object):
         
         # properties
         self.sketch_ids = [0,0,0,0,0]
-        self.values = {'num_sections':10, 'num_profile_points':30, 'mirror':False}
+        self.values = {
+                       'mirror':False,
+                       'centre_straight':True,
+                       }
         self.color = cad.Color(128, 128, 128)
         
         if icon == None:
@@ -54,29 +57,31 @@ class Wing(cad.Object):
     def GetTypeString(self):
         return "Wing"
 
-    def GetUnitizedSectionPoints(self, index):
+    def GetUnitizedSectionPoints(self, tip_fraction):
         # the start point will be geom.Point(0,0) and the last point will be geom.Point(1,0)
-        if self.values['num_profile_points'] == 0:
-            return [geom.Point(0,0), geom.Point(1,0)]
-            
-        tip_fraction = float(index) / self.values['num_sections']
-        
         pts = []
             
-        for i in range(0, self.values['num_profile_points'] + 1):
-            fraction = float(i) / self.values['num_profile_points']
-            root_point = GetUnitizedPoint(self.curves[2], fraction, self.root_profile_invtm)
+        perim = self.curves[2].Perim()
+        cur_perim = 0.0
+        prev_v = None
+        
+        for v in self.curves[2].GetVertices():
+            if prev_v != None:
+                span = geom.Span(prev_v.p, v, False)
+                cur_perim += span.Length()
+            fraction = cur_perim / perim
+            root_point = GetUnitizedPoint(self.curves[2], fraction, self.root_profile_invtm, self.values['centre_straight'] and (tip_fraction < 0.01))
             if root_point == None: return
-            tip_point = GetUnitizedPoint(self.curves[3], fraction, self.tip_profile_invtm)
+            tip_point = GetUnitizedPoint(self.curves[3], fraction, self.tip_profile_invtm, self.values['centre_straight'] and (tip_fraction < 0.01))
             if tip_point == None: return
-            v = tip_point - root_point
-            p = root_point + v * tip_fraction
+            vec = tip_point - root_point
+            p = root_point + vec * tip_fraction
             pts.append(p)
+            prev_v = v
         return pts
 
-    def GetLeadingEdgePoint(self, index):
+    def GetLeadingEdgePoint(self, fraction):
         perim = self.curves[0].Perim()
-        fraction = float(index) / self.values['num_sections']
         return self.curves[0].PerimToPoint(perim * fraction)
         
     def GetTrailingEdgePoint(self, leading_edge_point):
@@ -88,11 +93,10 @@ class Wing(cad.Object):
             return None
         return pts[0]
         
-    def GetAngle(self, index):
+    def GetAngle(self, fraction):
         if self.curves[4] == None:
             return 0.0
         box = self.curves[4].GetBox()
-        fraction = float(index) / self.values['num_sections']
         x = box.MinX() + box.Width() * fraction
         curve = geom.Curve()
         curve.Append(geom.Point(x, box.MinY() - 1.0))
@@ -102,8 +106,8 @@ class Wing(cad.Object):
         angle = pts[0].y - box.MinY()
         return angle
         
-    def GetOrderedSectionPoints(self, index):
-        leading_edge_p = self.GetLeadingEdgePoint(index)
+    def GetOrderedSectionPoints(self, fraction):
+        leading_edge_p = self.GetLeadingEdgePoint(fraction)
         if leading_edge_p == None: return
         trailing_edge_p = self.GetTrailingEdgePoint(leading_edge_p)
         if trailing_edge_p == None:
@@ -112,20 +116,24 @@ class Wing(cad.Object):
         else:
             v = trailing_edge_p - leading_edge_p
             length = leading_edge_p.Dist(trailing_edge_p)
-        pts = self.GetUnitizedSectionPoints(index)
+        pts = self.GetUnitizedSectionPoints(fraction)
         if pts == None: return
         pts2 = []
-        a = self.GetAngle(index) * 0.01745329251994
+        a = self.GetAngle(fraction) * 0.01745329251994
         for pt in pts:
             pt.Rotate(a)
             hpoint = leading_edge_p + v * pt.x
             pts2.append(geom.Point3d(hpoint.x, hpoint.y, pt.y * length))
         return pts2
 
-    def DrawSection(self, index):
-        pts0 = self.GetOrderedSectionPoints(index)
+    def DrawSection(self, span):
+        xmax = self.curves[1].LastVertex().p.x
+        if xmax < 0.001: return
+        fraction0 = span.p.x / xmax
+        fraction1 = span.v.p.x / xmax
+        pts0 = self.GetOrderedSectionPoints(fraction0)
         if pts0 == None: return
-        pts1 = self.GetOrderedSectionPoints(index + 1)
+        pts1 = self.GetOrderedSectionPoints(fraction1)
         if pts1 == None: return
         
         prev_p0 = None
@@ -144,17 +152,17 @@ class Wing(cad.Object):
         if self.curves[0] == None:
             return # can't draw anything without a leading edge
         
-        for i in range(0, self.values['num_sections']):
-            self.DrawSection(i)
+        # use the spans of trailing edge to define the sections
+        for span in self.curves[1].GetSpans():
+            self.DrawSection(span)
                 
     def GetProperties(self):
         for i in range(0, 5):
             p = PropertySketch(self, i)
             properties.append(p) # to not let it be deleted
             cad.AddProperty(p)
-        AddPyProperty('number of sections', 'num_sections', self)
-        AddPyProperty('number of profile points', 'num_profile_points', self)
         AddPyProperty('mirror', 'mirror', self)
+        AddPyProperty('centre_straight', 'centre_straight', self)
         
     def GetColor(self):
         return self.color
@@ -173,8 +181,8 @@ class Wing(cad.Object):
         cad.SetXmlValue('col', str(self.color.ref()))
         for i in range(0, len(self.sketch_ids)):
             cad.SetXmlValue(sketch_xml_names[i], str(self.sketch_ids[i]))
-        cad.SetXmlValue('num_sections', str(self.values['num_sections']))
-        cad.SetXmlValue('num_profile_points', str(self.values['num_profile_points']))
+        cad.SetXmlValue('mirror', str(self.values['mirror']))
+        cad.SetXmlValue('centre_straight', str(self.values['centre_straight']))
 
 def XMLRead():
     new_object = Wing()
@@ -183,10 +191,8 @@ def XMLRead():
         new_object.color = cad.Color(int(s))
     for i in range(0, len(sketch_xml_names)):
         new_object.sketch_ids[i] = int(cad.GetXmlValue(sketch_xml_names[i]))
-    s = cad.GetXmlValue('num_sections')
-    if s != '': new_object.values['num_sections'] = int(s)
-    s = cad.GetXmlValue('num_profile_points')
-    if s != '': new_object.values['num_profile_points'] = int(s)
+    s = cad.GetXmlValue('mirror')
+    if s != '': new_object.values['mirror'] = bool(s)
     
     return new_object
 
@@ -247,8 +253,10 @@ def GetTmFromCurve(curve):
     tm = geom.Matrix(o, vvx, vvy)
     return tm.Inverse()
 
-def GetUnitizedPoint(curve, fraction, invtm):
+def GetUnitizedPoint(curve, fraction, invtm, centre_straight):
     if curve == None: return
+    if centre_straight:
+        return geom.Point(fraction, 0.0)
     xdist = curve.LastVertex().p.Dist(curve.FirstVertex().p)
     if xdist < 0.00001:
         return geom.Point(0,0)
