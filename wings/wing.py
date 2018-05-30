@@ -7,6 +7,10 @@ icon = None
 property_titles = ['leading edge', 'trailing edge', 'root profile', 'tip profile', 'angle graph']
 sketch_xml_names = ['LeadingEdge', 'TrailingEdge', 'RootProfile', 'TipProfile', 'AngleGraph']
 properties = []
+wing_for_tools = None
+drawing_sketches = False
+stl_to_add_to = None
+section_index = None
 
 class Wing(cad.Object):
     def __init__(self):
@@ -127,6 +131,10 @@ class Wing(cad.Object):
         return pts2
 
     def DrawSection(self, span):
+        if drawing_sketches:
+            global stl_to_add_to
+            stl_to_add_to = geom.Stl()
+            
         xmax = self.curves[1].LastVertex().p.x
         if xmax < 0.001: return
         fraction0 = span.p.x / xmax
@@ -136,13 +144,34 @@ class Wing(cad.Object):
         pts1 = self.GetOrderedSectionPoints(fraction1)
         if pts1 == None: return
         
+        for pt in pts1:
+            print('x' + str(pt.x) + ', y' + str(pt.y) + ', z' + str(pt.z) + '\n')
+        
         prev_p0 = None
         prev_p1 = None
         
+        if drawing_sketches:
+            mirror = False
+        else:
+            mirror = self.values['mirror']
+        
         for p0, p1 in zip(pts0, pts1):
-            DrawTrianglesBetweenPoints(prev_p0, prev_p1, p0, p1, self.values['mirror'])
+            DrawTrianglesBetweenPoints(prev_p0, prev_p1, p0, p1, mirror)
             prev_p0 = p0
             prev_p1 = p1
+            
+        if drawing_sketches:
+            if section_index != 7:
+                return
+            surface = stl_to_add_to.GetFlattenedSurface()
+            outline = surface.Shadow(geom.Matrix(), True)
+            outline.Offset(-2.0)
+            curves = surface.GetTrianglesAsCurveList()
+            area_fp = tempfile.gettempdir() + '/area.dxf'
+            for curve in curves:
+                outline.Append(curve)
+            outline.WriteDxf(area_fp)
+            cad.Import(area_fp)
         
     def OnRenderTriangles(self):
         if self.box == None:
@@ -152,9 +181,13 @@ class Wing(cad.Object):
         if self.curves[0] == None:
             return # can't draw anything without a leading edge
         
+        global section_index
+        section_index = 0
+        
         # use the spans of trailing edge to define the sections
         for span in self.curves[1].GetSpans():
             self.DrawSection(span)
+            section_index += 1
                 
     def GetProperties(self):
         for i in range(0, 5):
@@ -183,6 +216,17 @@ class Wing(cad.Object):
             cad.SetXmlValue(sketch_xml_names[i], str(self.sketch_ids[i]))
         cad.SetXmlValue('mirror', str(self.values['mirror']))
         cad.SetXmlValue('centre_straight', str(self.values['centre_straight']))
+        
+    def GetTools(self):
+        global wing_for_tools
+        wing_for_tools = self
+        self.AddTool('Make Sketches', MakeSketches)
+        
+    def MakeSketches(self):
+        global drawing_sketches
+        drawing_sketches = True
+        self.OnRenderTriangles()
+        drawing_sketches = False
 
 def XMLRead():
     new_object = Wing()
@@ -228,26 +272,57 @@ class PropertySketch(cad.Property):
     
     def MakeACopy(self, o):
         return PropertySketch(self.wing, self.index)
+        
+def AddTriangleToSketch(x0, y0, z0, x1, y1, z1, x2, y2, z2):
+    p0 = geom.Point3d(x0,y0,z0)
+    p1 = geom.Point3d(x1,y1,z1)
+    p2 = geom.Point3d(x2,y2,z2)
+    if p0 == p1:
+        return
+    if p1 == p2:
+        return
+    if p2 == p0:
+        return
+    stl_to_add_to.Add(p0, p1, p2)
+
+def DrawTriangle(x0, y0, z0, x1, y1, z1, x2, y2, z2):
+    if drawing_sketches:
+        AddTriangleToSketch(x0, y0, z0, x1, y1, z1, x2, y2, z2)
+    else:
+        cad.DrawTriangle(x0, y0, z0, x1, y1, z1, x2, y2, z2)
 
 def DrawTrianglesBetweenPoints(prev_p0, prev_p1, p0, p1, mirror):
     if prev_p0 == None:
         return
-    cad.DrawTriangle(prev_p0.x, prev_p0.y, prev_p0.z, p0.x, p0.y, p0.z, p1.x, p1.y, p1.z)
-    cad.DrawTriangle(prev_p0.x, prev_p0.y, prev_p0.z, p1.x, p1.y, p1.z, prev_p1.x, prev_p1.y, prev_p1.z)
+    DrawTriangle(p1.x, p1.y, p1.z, prev_p0.x, prev_p0.y, prev_p0.z, p0.x, p0.y, p0.z)
+    DrawTriangle(prev_p1.x, prev_p1.y, prev_p1.z, prev_p0.x, prev_p0.y, prev_p0.z, p1.x, p1.y, p1.z)
     if mirror:
         cad.DrawTriangle(-prev_p0.x, prev_p0.y, prev_p0.z, -p1.x, p1.y, p1.z, -p0.x, p0.y, p0.z)
         cad.DrawTriangle(-prev_p0.x, prev_p0.y, prev_p0.z, -prev_p1.x, prev_p1.y, prev_p1.z, -p1.x, p1.y, p1.z)
-        
+
+def GetMinXPoint(curve):
+    minxp = None
+    for v in curve.GetVertices():
+        if minxp == None or v.p.x < minxp.x:
+            minxp = v.p
+    return minxp
+
+def GetMaxXPoint(curve):
+    maxxp = None
+    for v in curve.GetVertices():
+        if maxxp == None or v.p.x > maxxp.x:
+            maxxp = v.p
+    return maxxp
 
 def GetTmFromCurve(curve):
     if curve == None:
         return
-    ps = curve.FirstVertex().p
-    pe = curve.LastVertex().p
+    ps = GetMinXPoint(curve)
+    pe = GetMaxXPoint(curve)
     vx = pe - ps
     vx.Normalize()
     vy = ~vx
-    o = geom.Point3d(curve.FirstVertex().p.x, curve.FirstVertex().p.y, 0.0)
+    o = geom.Point3d(ps.x, ps.y, 0.0)
     vvx = geom.Vector3d(vx.x, vx.y, 0.0)
     vvy = geom.Vector3d(vy.x, vy.y, 0.0)
     tm = geom.Matrix(o, vvx, vvy)
@@ -255,15 +330,17 @@ def GetTmFromCurve(curve):
 
 def GetUnitizedPoint(curve, fraction, invtm, centre_straight):
     if curve == None: return
-    if centre_straight:
-        return geom.Point(fraction, 0.0)
     xdist = curve.LastVertex().p.Dist(curve.FirstVertex().p)
     if xdist < 0.00001:
         return geom.Point(0,0)
     scale = 1.0/xdist
     p = curve.PerimToPoint(curve.Perim() * fraction)
     p.Transform(invtm)
-    return geom.Point(p.x * scale, p.y * scale)
+    pu = geom.Point(p.x * scale, p.y * scale)
+    if centre_straight:
+        pu.y = 0
+    return pu
+
     
 class PyProperty(cad.Property):
     def __init__(self, title, value_name, object):
@@ -314,3 +391,6 @@ def AddPyProperty(title, value_name, object):
     properties.append(p) # to not let it be deleted
     cad.AddProperty(p)
  
+def MakeSketches():
+    global wing_for_tools
+    wing_for_tools.MakeSketches()
