@@ -147,6 +147,7 @@ void setServos()
      }
 
     double height = GetHeightFromFraction(cycle_fraction);
+    if(throttle > 0.9)height *= 1.5;
     double left_height = left_centre + height;
     double right_height = right_centre + height;
     setServoHeight(false, left_height);
