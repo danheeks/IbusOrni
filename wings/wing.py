@@ -2,21 +2,21 @@ import cad
 import math
 import geom
 import tempfile
+import os
 
-icon = None
 property_titles = ['leading edge', 'trailing edge', 'root profile', 'tip profile', 'angle graph']
 sketch_xml_names = ['LeadingEdge', 'TrailingEdge', 'RootProfile', 'TipProfile', 'AngleGraph']
-properties = []
 wing_for_tools = None
 drawing_sketches = False
 stl_to_add_to = None
 section_index = None
 
-class Wing(cad.Object):
+wings_dir = os.path.dirname(os.path.realpath(__file__))
+
+class Wing(cad.BaseObject):
     def __init__(self):
-        cad.Object.__init__(self)
+        cad.BaseObject.__init__(self)
         self.SetUsesGLList(True)
-        global icon
         
         # properties
         self.sketch_ids = [0,0,0,0,0]
@@ -26,10 +26,14 @@ class Wing(cad.Object):
                        }
         self.color = cad.Color(128, 128, 128)
         
-        if icon == None:
-            icon = cad.Bitmap('C:/Dev/IbusOrni/trunk/wings/icons/wing.png')
         self.box = None  # if box is None, then the curves need reloading
         self.ResetCurves()
+        
+    def GetTitle(self):
+        return "Wing"
+    
+    def GetIconFilePath(self):
+        return wings_dir + '/icons/wing.png'
         
     def ResetCurves(self):
         self.curves = []
@@ -52,12 +56,8 @@ class Wing(cad.Object):
         for i in range(0, len(self.sketch_ids)):
             if self.curves[i] != None:
                 curve_box = self.curves[i].GetBox()
-                self.box.Insert(geom.Box3D(curve_box.MinX(), curve_box.MinY(), 0.0, curve_box.MaxX(), curve_box.MaxY(), 0.0))
+                self.box.InsertBox(geom.Box3D(curve_box.MinX(), curve_box.MinY(), 0.0, curve_box.MaxX(), curve_box.MaxY(), 0.0))
 
-    def GetIcon(self):
-        global icon
-        return icon
-    
     def GetTypeString(self):
         return "Wing"
 
@@ -127,7 +127,7 @@ class Wing(cad.Object):
         for pt in pts:
             pt.Rotate(a)
             hpoint = leading_edge_p + v * pt.x
-            pts2.append(geom.Point3d(hpoint.x, hpoint.y, pt.y * length))
+            pts2.append(geom.Point3D(hpoint.x, hpoint.y, pt.y * length))
         return pts2
 
     def DrawSection(self, span):
@@ -143,9 +143,6 @@ class Wing(cad.Object):
         if pts0 == None: return
         pts1 = self.GetOrderedSectionPoints(fraction1)
         if pts1 == None: return
-        
-        for pt in pts1:
-            print('x' + str(pt.x) + ', y' + str(pt.y) + ', z' + str(pt.z) + '\n')
         
         prev_p0 = None
         prev_p1 = None
@@ -190,12 +187,13 @@ class Wing(cad.Object):
             section_index += 1
                 
     def GetProperties(self):
+        properties = []
         for i in range(0, 5):
             p = PropertySketch(self, i)
             properties.append(p) # to not let it be deleted
-            cad.AddProperty(p)
-        AddPyProperty('mirror', 'mirror', self)
-        AddPyProperty('centre_straight', 'centre_straight', self)
+        properties.append(PyProperty('mirror', 'mirror', self))  
+        properties.append(PyProperty('centre_straight', 'centre_straight', self))  
+        return properties
         
     def GetColor(self):
         return self.color
@@ -263,6 +261,18 @@ class PropertySketch(cad.Property):
         self.index = index
         self.wing = wing
         
+    def GetType(self):
+        # why is this not using base class?
+        return cad.PROPERTY_TYPE_INT
+    
+    def GetTitle(self):
+        # why is this not using base class?
+        return  property_titles[self.index]
+        
+    def editable(self):
+        # why is this not using base class?
+        return True
+        
     def SetInt(self, value):
         self.wing.sketch_ids[self.index] = value
         self.wing.Recalculate()
@@ -274,9 +284,9 @@ class PropertySketch(cad.Property):
         return PropertySketch(self.wing, self.index)
         
 def AddTriangleToSketch(x0, y0, z0, x1, y1, z1, x2, y2, z2):
-    p0 = geom.Point3d(x0,y0,z0)
-    p1 = geom.Point3d(x1,y1,z1)
-    p2 = geom.Point3d(x2,y2,z2)
+    p0 = geom.Point3D(x0,y0,z0)
+    p1 = geom.Point3D(x1,y1,z1)
+    p2 = geom.Point3D(x2,y2,z2)
     if p0 == p1:
         return
     if p1 == p2:
@@ -322,9 +332,9 @@ def GetTmFromCurve(curve):
     vx = pe - ps
     vx.Normalize()
     vy = ~vx
-    o = geom.Point3d(ps.x, ps.y, 0.0)
-    vvx = geom.Vector3d(vx.x, vx.y, 0.0)
-    vvy = geom.Vector3d(vy.x, vy.y, 0.0)
+    o = geom.Point3D(ps.x, ps.y, 0.0)
+    vvx = geom.Point3D(vx.x, vx.y, 0.0)
+    vvy = geom.Point3D(vy.x, vy.y, 0.0)
     tm = geom.Matrix(o, vvx, vvy)
     return tm.Inverse()
 
@@ -352,8 +362,21 @@ class PyProperty(cad.Property):
         cad.Property.__init__(self, t, title, object)
         self.value_name = value_name
         self.title = title
+        self.type = t
         self.recalc = object.Recalculate
         self.pyobj = object
+
+    def GetType(self):
+        # why is this not using base class?
+        return self.type
+
+    def GetTitle(self):
+        # why is this not using base class?
+        return self.title
+        
+    def editable(self):
+        # why is this not using base class?
+        return True
         
     def SetBool(self, value):
         self.pyobj.values[self.value_name] = value
