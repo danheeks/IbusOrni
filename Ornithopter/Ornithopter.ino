@@ -24,7 +24,6 @@ double startup_height = 1.05;   // attach wing in top position
 unsigned int startup_delay = 5; // seconds
 unsigned int startup_sweep_time = 4; // seconds
 bool armed = false;
-bool in_a_move = false;
 double fast_cycle_speed = 3.0;
 double slow_cycle_speed = 0.7;
 double cycle_fraction = 1.0;
