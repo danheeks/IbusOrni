@@ -3,6 +3,7 @@ import math
 import geom
 import tempfile
 import os
+from Object import Object
 
 property_titles = ['leading edge', 'trailing edge', 'root profile', 'tip profile', 'angle graph']
 sketch_xml_names = ['LeadingEdge', 'TrailingEdge', 'RootProfile', 'TipProfile', 'AngleGraph']
@@ -12,10 +13,11 @@ stl_to_add_to = None
 section_index = None
 
 wings_dir = os.path.dirname(os.path.realpath(__file__))
+list_of_things_to_not_delete = []
 
-class Wing(cad.BaseObject):
+class Wing(Object):
     def __init__(self):
-        cad.BaseObject.__init__(self)
+        Object.__init__(self)
         self.SetUsesGLList(True)
         
         # properties
@@ -65,23 +67,24 @@ class Wing(cad.BaseObject):
         # the start point will be geom.Point(0,0) and the last point will be geom.Point(1,0)
         pts = []
             
-        perim = self.curves[2].Perim()
-        cur_perim = 0.0
-        prev_v = None
-        
-        for v in self.curves[2].GetVertices():
-            if prev_v != None:
-                span = geom.Span(prev_v.p, v, False)
-                cur_perim += span.Length()
-            fraction = cur_perim / perim
-            root_point = GetUnitizedPoint(self.curves[2], fraction, self.root_profile_invtm, self.values['centre_straight'] and (tip_fraction < 0.01))
-            if root_point == None: return
-            tip_point = GetUnitizedPoint(self.curves[3], fraction, self.tip_profile_invtm, self.values['centre_straight'] and (tip_fraction < 0.01))
-            if tip_point == None: return
-            vec = tip_point - root_point
-            p = root_point + vec * tip_fraction
-            pts.append(p)
-            prev_v = v
+        if self.curves[2] and self.curves[3]:
+            perim = self.curves[2].Perim()
+            cur_perim = 0.0
+            prev_v = None
+            
+            for v in self.curves[2].GetVertices():
+                if prev_v != None:
+                    span = geom.Span(prev_v.p, v, False)
+                    cur_perim += span.Length()
+                fraction = cur_perim / perim
+                root_point = GetUnitizedPoint(self.curves[2], fraction, self.root_profile_invtm, self.values['centre_straight'] and (tip_fraction < 0.01))
+                if root_point == None: return
+                tip_point = GetUnitizedPoint(self.curves[3], fraction, self.tip_profile_invtm, self.values['centre_straight'] and (tip_fraction < 0.01))
+                if tip_point == None: return
+                vec = tip_point - root_point
+                p = root_point + vec * tip_fraction
+                pts.append(p)
+                prev_v = v
         return pts
 
     def GetLeadingEdgePoint(self, fraction):
@@ -190,9 +193,14 @@ class Wing(cad.BaseObject):
         properties = []
         for i in range(0, 5):
             p = PropertySketch(self, i)
-            properties.append(p) # to not let it be deleted
-        properties.append(PyProperty('mirror', 'mirror', self))  
-        properties.append(PyProperty('centre_straight', 'centre_straight', self))  
+            list_of_things_to_not_delete.append(p) # to not let it be deleted
+            properties.append(p)
+        p = PyProperty('mirror', 'mirror', self)
+        list_of_things_to_not_delete.append(p)
+        properties.append(p)
+        p = PyProperty('centre_straight', 'centre_straight', self)
+        list_of_things_to_not_delete.append(p)  
+        properties.append(p)
         return properties
         
     def GetColor(self):
@@ -267,21 +275,23 @@ class PropertySketch(cad.Property):
     
     def GetTitle(self):
         # why is this not using base class?
-        return  property_titles[self.index]
+        return property_titles[self.index]
         
     def editable(self):
         # why is this not using base class?
         return True
-        
+    
     def SetInt(self, value):
         self.wing.sketch_ids[self.index] = value
-        self.wing.Recalculate()
+        #self.wing.Recalculate()
         
     def GetInt(self):
         return self.wing.sketch_ids[self.index]
     
     def MakeACopy(self, o):
-        return PropertySketch(self.wing, self.index)
+        p = PropertySketch(self.wing, self.index)
+        list_of_things_to_not_delete.append(p)
+        return p
         
 def AddTriangleToSketch(x0, y0, z0, x1, y1, z1, x2, y2, z2):
     p0 = geom.Point3D(x0,y0,z0)
@@ -407,12 +417,9 @@ class PyProperty(cad.Property):
         return self.pyobj.values[self.value_name]
     
     def MakeACopy(self, o):
-        return PyProperty(self.title, self.value_name, self.pyobj)
-
-def AddPyProperty(title, value_name, object):
-    p = PyProperty(title, value_name, object)
-    properties.append(p) # to not let it be deleted
-    cad.AddProperty(p)
+        p = PyProperty(self.title, self.value_name, self.pyobj)
+        list_of_things_to_not_delete.append(p)
+        return p
  
 def MakeSketches():
     global wing_for_tools

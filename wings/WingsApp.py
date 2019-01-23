@@ -3,7 +3,6 @@ import os
 import sys
 import cad
 from wing import XMLRead
-from wing import Wing
 
 wings_dir = os.path.dirname(os.path.realpath(__file__))
 pycad_dir = os.path.realpath(wings_dir + '/../../../PyCAD/trunk')
